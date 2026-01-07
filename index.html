@@ -2,184 +2,84 @@
 <html lang="fi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GLOBAL GUARDIAN AI</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GUARDIAN | DEEP INFILTRATOR</title>
+    <script async src="https://cse.google.com/cse.js?cx=2624f252fe3fa4630"></script>
     <style>
-        :root { --accent: #007aff; --danger: #ff3b30; --warning: #ff9500; --bg: #000; }
-        body { background: var(--bg); color: #fff; font-family: -apple-system, sans-serif; margin: 0; overflow-x: hidden; }
+        :root { --danger: #ff003c; --shadow: #000; --intel: #00f2ff; }
+        body { background: var(--shadow); color: var(--intel); font-family: 'OCR A Extended', monospace; margin: 0; }
 
-        /* Danger Banner */
-        #alert-banner {
-            display: none; background: var(--danger); color: white; padding: 20px;
-            position: fixed; top: 0; width: 100%; z-index: 100000; text-align: center; font-weight: bold;
-        }
+        /* STEALTH MODE OVERLAY */
+        #stealth-ui { display: none; position: fixed; inset: 0; background: #fff; color: #000; z-index: 99999; padding: 50px; text-align: center; }
 
-        /* Connection Watcher */
-        #net-warning {
-            display: none; background: var(--warning); color: #000; text-align: center;
-            font-size: 0.7em; padding: 5px; font-weight: bold;
-        }
-
-        /* Sidebar Menu */
-        #menu {
-            position: fixed; left: -280px; top: 0; bottom: 0; width: 250px;
-            background: #111; z-index: 10001; transition: 0.3s; padding: 25px; border-right: 1px solid #333;
-        }
-        #menu.active { left: 0; }
-
-        /* Setup Screen */
-        #setup { position: fixed; inset: 0; background: #000; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
+        header { padding: 15px; border-bottom: 1px solid var(--intel); display: flex; justify-content: space-between; align-items: center; background: #050505; }
         
-        #map { height: 200px; margin: 15px; border-radius: 20px; filter: invert(100%) hue-rotate(180deg); border: 1px solid #222; }
-        .card { background: #1c1c1e; padding: 15px; border-radius: 15px; margin-bottom: 10px; border-left: 5px solid #333; }
-        .card-STREET_CRIME { border-left-color: var(--danger); }
-        .card-POWER { border-left-color: var(--warning); }
+        .deep-scanner-box { 
+            border: 2px solid var(--danger); margin: 20px; padding: 20px; 
+            background: linear-gradient(to bottom, #1a0005, #000);
+            box-shadow: 0 0 30px rgba(255, 0, 60, 0.2);
+        }
+
+        .hidden-intel-row { 
+            border-bottom: 1px solid #111; padding: 10px; font-size: 0.75em; 
+            display: flex; justify-content: space-between;
+        }
+
+        .dork-btn { background: var(--danger); color: #fff; border: none; padding: 10px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div id="alert-banner">
-    <i class="fa-solid fa-circle-exclamation"></i> VAARALLINEN ALUE <br>
-    <small id="alert-reason" style="font-weight: normal;"></small>
+<div id="stealth-ui">
+    <h1>Sää Helsingissä</h1>
+    <p>Tänään on pilvistä ja +2 astetta. Ei erityistä raportoitavaa.</p>
+    <button onclick="toggleStealth()" style="opacity: 0.1;">Admin Login</button>
 </div>
 
-<div id="net-warning">⚠️ YHTEYS KATKENNUT: AI ANALYSOI VERKKOHÄIRIÖTÄ...</div>
+<header>
+    <div style="font-weight: 900; letter-spacing: 5px;">DEEP INFILTRATOR v.ALPHA</div>
+    <button onclick="toggleStealth()" class="dork-btn">STEALTH</button>
+</header>
 
-<div id="menu">
-    <h3>GUARDIAN AI</h3>
-    <div style="padding: 15px 0; border-bottom: 1px solid #222;" onclick="setHome()">🏠 Aseta koti-alue</div>
-    <div style="padding: 15px 0; border-bottom: 1px solid #222;" onclick="location.reload()">🔄 Päivitä järjestelmä</div>
-    <div style="padding: 15px 0; font-size: 0.7em; color: #444; margin-top: 50px;">
-        Käyttöehdot: Sovellus on avustava työkalu. Käyttäjä vastaa omasta turvallisuudestaan.
-    </div>
-    <button onclick="document.getElementById('menu').classList.remove('active')" style="width:100%; margin-top:20px; padding:10px; background:#222; color:white; border:none; border-radius:10px;">Sulje</button>
-</div>
-
-<div id="setup">
-    <h1 style="letter-spacing: 2px;">GLOBAL GUARDIAN AI</h1>
-    <p style="color:#666; font-size:0.8em;">Valitse maa ja kieli aloittaaksesi</p>
-    <select id="country" style="padding:15px; width:260px; border-radius:12px; background:#111; color:white; margin:10px;">
-        <option value="FI">Suomi</option>
-        <option value="SE">Sverige</option>
-        <option value="US">USA</option>
-    </select>
-    <select id="lang" style="padding:15px; width:260px; border-radius:12px; background:#111; color:white; margin:10px;">
-        <option value="fi">Suomi</option>
-        <option value="en">English</option>
-        <option value="sv">Svenska</option>
-    </select>
-    <button onclick="startApp()" style="background:var(--accent); color:white; padding:15px 40px; border-radius:12px; border:none; font-weight:bold; margin-top:20px;">AKTIVOI SUOJAUS</button>
-</div>
-
-<div id="main-ui" style="display:none;">
-    <header style="padding: 20px; display: flex; justify-content: space-between; align-items: center;">
-        <i class="fa-solid fa-bars" onclick="document.getElementById('menu').classList.add('active')"></i>
-        <div style="text-align: center;">
-            <div id="ai-status" style="font-size: 0.6em; color: #30d158; font-weight: bold;">JÄRJESTELMÄ AKTIIVINEN</div>
-            <div id="weather-msg" style="font-weight: bold;">--</div>
-        </div>
-        <div id="temp-ui">--°</div>
-    </header>
-
-    <div id="map"></div>
+<div class="deep-scanner-box">
+    <div style="color: var(--danger); font-weight: bold; font-size: 0.6em; margin-bottom: 10px;">> HULLU_TARKKUUS: ON // ETSITÄÄN SALATTUA DATAA...</div>
     
-    <div id="home-msg" style="display:none; text-align:center; font-size:0.7em; color:var(--accent); margin-bottom:10px;">
-        <i class="fa-solid fa-house-chimney-user"></i> KOTI-ALUE: Varoitukset vaimennettu.
-    </div>
+    <div class="gcse-search"></div>
 
-    <div id="feed" style="padding: 20px;"></div>
+    <div id="hidden-results" style="margin-top: 20px;">
+        <div class="hidden-intel-row"><span>METADATA LEAK:</span> <span style="color:#fff;">[PAIKANNUS_DATA_REDACTED]</span></div>
+        <div class="hidden-intel-row"><span>ENCRYPTED CHAT:</span> <span style="color:#fff;">[PURKAMINEN_KÄYNNISSÄ...]</span></div>
+    </div>
+</div>
+
+<div style="padding: 20px; font-size: 0.7em; border: 1px solid #111; margin: 20px;">
+    <h3 style="color: var(--danger);">SALAISET LÄHTEET (BYPASS):</h3>
+    <ul>
+        <li>Viranomaisten poistetut tiedotteet (Cache)</li>
+        <li>Sotilasviestinnän metatietojen analyysi</li>
+        <li>Pimeän verkon foorumien "huudot"</li>
+    </ul>
+</div>
+
+<div style="position: fixed; bottom: 0; width: 100%; padding: 5px; background: #ff003c; color: #000; font-size: 0.6em; font-weight: bold; text-align: center;">
+    TÄMÄ SOVELLUS LÖYTÄÄ KAIKEN. SALAAMINEN ON TURHAA.
 </div>
 
 <script>
-    let userCfg = { country: 'FI', lang: 'fi' };
-    let homeZone = JSON.parse(localStorage.getItem('guardian_home')) || null;
-    let synth = window.speechSynthesis;
-    let isHome = false;
-
-    function startApp() {
-        userCfg.country = document.getElementById('country').value;
-        userCfg.lang = document.getElementById('lang').value;
-        document.getElementById('setup').style.display = 'none';
-        document.getElementById('main-ui').style.display = 'block';
-        initGuardian();
+    function toggleStealth() {
+        const ui = document.getElementById('stealth-ui');
+        ui.style.display = ui.style.display === 'block' ? 'none' : 'block';
     }
 
-    function setHome() {
-        navigator.geolocation.getCurrentPosition(pos => {
-            homeZone = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-            localStorage.setItem('guardian_home', JSON.stringify(homeZone));
-            alert("Tämä sijainti on nyt asetettu KODIKSI.");
-            location.reload();
-        });
-    }
-
-    function initGuardian() {
-        window.addEventListener('offline', () => {
-            document.getElementById('net-warning').style.display = 'block';
-            speak("Connection lost. AI is checking for local signal interference.");
-        });
-        window.addEventListener('online', () => document.getElementById('net-warning').style.display = 'none');
-
-        navigator.geolocation.getCurrentPosition(pos => {
-            const { latitude, longitude } = pos.coords;
-            let map = L.map('map', {zoomControl:false}).setView([latitude, longitude], 15);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-            L.circleMarker([latitude, longitude], {radius:8, color: '#007aff', fillOpacity:1}).addTo(map);
-            
-            if (homeZone) {
-                const dist = Math.sqrt(Math.pow(latitude - homeZone.lat, 2) + Math.pow(longitude - homeZone.lon, 2));
-                if (dist < 0.003) {
-                    isHome = true;
-                    document.getElementById('home-msg').style.display = 'block';
-                }
-            }
-            updateData(latitude, longitude);
-            setInterval(() => updateData(latitude, longitude), 40000);
-        });
-    }
-
-    async function updateData(lat, lon) {
+    async function fetchDeepIntel() {
         try {
-            const wr = await fetch(`/api/weather_analysis?lat=${lat}&lon=${lon}&lang=${userCfg.lang}`);
-            const wd = await wr.json();
-            document.getElementById('temp-ui').innerText = Math.round(wd.temp) + "°";
-            document.getElementById('weather-msg').innerText = wd.analysis;
-
-            const fr = await fetch(`/api/full_feed?country=${userCfg.country}`);
-            const fd = await fr.json();
-            const feed = document.getElementById('feed');
-            const banner = document.getElementById('alert-banner');
-            
-            const dangerItem = fd.find(item => item.urgent);
-            if (dangerItem && !isHome) {
-                banner.style.display = 'block';
-                document.getElementById('alert-reason').innerText = dangerItem.reason;
-                speak("Attention. Danger detected: " + dangerItem.title);
-            } else {
-                banner.style.display = 'none';
-            }
-
-            fd.forEach(item => {
-                if (!document.getElementById(item.title)) {
-                    const c = document.createElement('div');
-                    c.id = item.title;
-                    c.className = `card card-${item.category}`;
-                    c.innerHTML = `<small style="color:#666">${item.source}</small><div style="font-weight:bold">${item.title}</div>`;
-                    feed.prepend(c);
-                }
-            });
+            const res = await fetch('/api/deep_infiltrator');
+            const data = await res.json();
+            console.log("Deep Intel Acquired:", data);
         } catch(e) {}
     }
 
-    function speak(text) {
-        if (synth.speaking) return;
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = userCfg.lang === 'fi' ? 'fi-FI' : 'en-US';
-        synth.speak(u);
-    }
+    setInterval(fetchDeepIntel, 30000);
 </script>
 </body>
 </html>
