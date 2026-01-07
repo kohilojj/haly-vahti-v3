@@ -1,10 +1,17 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 import feedparser
+import os
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../')
 CORS(app)
 
+# Reitti etusivulle (index.html)
+@app.route('/')
+def serve_index():
+    return send_from_directory(os.path.join(app.root_path, '../'), 'index.html')
+
+# Reitti hälytysdatalle
 @app.route('/api/full_feed')
 def get_feed():
     sources = {
@@ -26,5 +33,3 @@ def get_feed():
         except:
             pass
     return jsonify(all_events)
-
-app = app
