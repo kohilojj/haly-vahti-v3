@@ -6,11 +6,12 @@ import re
 import os
 from datetime import datetime
 
-# Asetetaan static_folder juureen, jotta Flask löytää index.html:n
+# Vercel-ympäristössä static_folder pitää osoittaa juureen, jotta index.html löytyy
 app = Flask(__name__, static_folder='../')
 CORS(app)
 
-# --- GLOBAALIT TIETOLÄHTEET ---
+# --- GLOBAALIT LÄHTEET ---
+# Nämä agentit vahtivat eri maita erikseen
 SOURCES = {
     "FI": {
         "Poliisi": "https://poliisi.fi/ajankohtaista/uutiset/-/asset_publisher/vK9pUnk5iI9i/rss",
@@ -22,7 +23,7 @@ SOURCES = {
         "Krisinfo": "https://api.krisinformation.se/v1/feed?format=rss"
     },
     "US": {
-        "Safety": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.atom",
+        "USGS_Quakes": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.atom",
         "Weather_Alerts": "https://alerts.weather.gov/cap/us.php?x=1"
     }
 }
@@ -38,45 +39,61 @@ def get_feed():
         try:
             feed = feedparser.parse(url)
             for entry in feed.entries:
-                if entry.title not in seen:
-                    # Sähkökatko-tunnistus AI-avainsanoilla
-                    outage_keywords = ["sähkökatko", "power outage", "blackout", "strömavbrott"]
-                    is_outage = any(x in entry.title.lower() for x in outage_keywords)
+                title = entry.title
+                if title not in seen:
+                    # AI-tunnistus sähkökatkoille (Suomi, Ruotsi, Englanti)
+                    outage_words = ["sähkökatko", "power outage", "blackout", "strömavbrott", "elavbrott"]
+                    is_outage = any(word in title.lower() for word in outage_words)
                     
                     all_events.append({
+                        "id": entry.get('link', title),
                         "source": name,
-                        "title": entry.title,
+                        "title": title,
                         "is_outage": is_outage,
                         "time": datetime.now().strftime("%H:%M")
                     })
-                    seen.add(entry.title)
-        except: continue
-    return jsonify(all_events)
+                    seen.add(title)
+        except Exception as e:
+            continue
+            
+    # Palautetaan vain tuoreimmat uutiset
+    return jsonify(all_events[:40])
 
 @app.route('/api/weather_analysis')
 def weather_analysis():
     lat = request.args.get('lat', type=float)
     lon = request.args.get('lon', type=float)
     lang = request.args.get('lang', default='fi')
+    
     try:
+        # Haetaan sää Open-Meteo API:sta
         w_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,precipitation,weather_code,visibility&forecast_days=1"
         r = requests.get(w_url).json()
         curr = r['current']
         
-        messages = {
+        # Monikieliset AI-viestit
+        translations = {
             "fi": ["✅ Kaikki kunnossa", "⚠️ Liukas tie", "🌫️ Huono näkyvyys"],
             "en": ["✅ All clear", "⚠️ Slippery roads", "🌫️ Low visibility"],
             "sv": ["✅ Allt lugnt", "⚠️ Hal väg", "🌫️ Dålig sikt"]
         }
-        m_list = messages.get(lang, messages["en"])
-        msg = m_list[0]
-        if curr['temperature_2m'] < 1 and curr['precipitation'] > 0: msg = m_list[1]
-        elif curr['visibility'] < 1000: msg = m_list[2]
+        
+        m = translations.get(lang, translations["en"])
+        msg = m[0]
+        if curr['temperature_2m'] < 1 and curr['precipitation'] > 0:
+            msg = m[1]
+        elif curr['visibility'] < 1000:
+            msg = m[2]
 
-        return jsonify({"temp": curr['temperature_2m'], "analysis": msg})
+        return jsonify({
+            "temp": curr['temperature_2m'],
+            "analysis": msg,
+            "precip": curr['precipitation']
+        })
     except:
-        return jsonify({"temp": "--", "analysis": "Error"})
+        return jsonify({"temp": "--", "analysis": "N/A"})
 
+# Tärkeä reitti: Jos osoite ei ole /api, lähetetään index.html
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def catch_all(path):
