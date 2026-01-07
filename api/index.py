@@ -6,26 +6,23 @@ import re
 import requests
 from datetime import datetime
 
+# Flask-sovelluksen alustus
 app = Flask(__name__, static_folder='../')
 CORS(app)
 
-# --- ASETUKSET JA SUODATTIMET ---
-
-# Estetään turhat uutiset, jotka eivät ole hälytyksiä
+# --- ÄLYKKÄÄT SUODATTIMET ---
+# Poistetaan uutiset, jotka eivät ole akuutteja hälytyksiä
 BLACKLIST = [
-    "oikeus", "käräjillä", "syyte", "tuomio", "päätoimittaja", 
-    "muutosneuvottelut", "irtisanoo", "ennätyslukemiin", "tutkimus", 
-    "analyysi", "kolumni", "mielipide", "historia", "palkinto", 
-    "arkisto", "digi", "urheilu", "viihde", "pörssi"
+    "oikeus", "käräjillä", "syyte", "tuomio", "irtisanoo", "ennätys", 
+    "päätoimittaja", "analyysi", "kolumni", "mielipide", "historia",
+    "palkinto", "arkisto", "digi", "urheilu", "viihde", "pörssi"
 ]
 
-# Nämä sanat ohittavat suodattimen (Priority)
+# Nämä sanat varmistavat, että tärkeät asiat tulevat läpi
 PRIORITY = [
     "kadonnut", "etsitään", "kaivataan", "tuntomerkit", "kolari", 
     "onnettomuus", "tulipalo", "vaara", "suljettu", "tie", "räjähdys"
 ]
-
-# --- REIPPAASTI LAAJENNETTU TIEDONHAKU ---
 
 @app.route('/api/full_feed')
 def get_feed():
@@ -33,8 +30,8 @@ def get_feed():
         "POLIISI": "https://poliisi.fi/ajankohtaista/uutiset/-/asset_publisher/vK9pUnk5iI9i/rss",
         "POLIISI_HAKU": "https://poliisi.fi/haku/-/asset_publisher/vK9pUnk5iI9i/rss?_101_INSTANCE_vK9pUnk5iI9i_keywords=kadonnut",
         "TILANNEHUONE": "https://www.tilannehuone.fi/haelytykset-rss.php",
-        "YLE_KOTIMAA": "https://feeds.yle.fi/uutiset/v1/recent.rss?publisherIds=YLE_UUTISET&concepts=18-34837",
-        "VAARA_112": "https://112.fi/vaaratiedotteet-rss"
+        "YLE": "https://feeds.yle.fi/uutiset/v1/recent.rss?publisherIds=YLE_UUTISET&concepts=18-34837",
+        "VAARA": "https://112.fi/vaaratiedotteet-rss"
     }
     
     all_events = []
@@ -47,96 +44,62 @@ def get_feed():
                 title = entry.title.strip()
                 title_lc = title.lower()
                 
-                # 1. Älykäs suodatus (Gettomasat ja talousuutiset pois)
                 is_blacklisted = any(word in title_lc for word in BLACKLIST)
                 is_priority = any(word in title_lc for word in PRIORITY)
                 
                 if is_blacklisted and not is_priority:
                     continue
 
-                # 2. Kaksoiskappaleiden esto (Deduplication)
-                # Puhdistetaan otsikko vertailua varten
                 norm_title = re.sub(r'[^\w\s]', '', title_lc)
                 if norm_title not in seen_titles:
                     all_events.append({
                         "id": entry.get('link', title), 
                         "source": name, 
-                        "title": title, 
-                        "summary": entry.get('summary', ""),
+                        "title": title,
                         "is_priority": is_priority,
                         "time": datetime.now().strftime("%H:%M")
                     })
                     seen_titles.add(norm_title)
-        except Exception as e:
-            print(f"Virhe lähteessä {name}: {e}")
+        except:
+            continue
             
     return jsonify(all_events)
 
-# --- SÄÄ-AI JA TURVALLISUUSANALYYSY ---
-
 @app.route('/api/weather_analysis')
 def weather_analysis():
-    # Haetaan koordinaatit selaimelta (oletus Helsinki)
     lat = request.args.get('lat', default=60.17, type=float)
     lon = request.args.get('lon', default=24.94, type=float)
     
     try:
-        # Open-Meteo API haku
-        weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,precipitation,snowfall,weather_code,visibility,wind_speed_10m&forecast_days=1"
-        res = requests.get(weather_url).json()
-        current = res['current']
+        w_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,precipitation,weather_code,visibility,wind_speed_10m&forecast_days=1"
+        r = requests.get(w_url).json()
+        curr = r['current']
         
-        temp = current['temperature_2m']
-        precip = current['precipitation']
-        snow = current['snowfall']
-        vis = current['visibility']
-        wind = current['wind_speed_10m']
-        code = current['weather_code']
+        temp = curr['temperature_2m']
+        prec = curr['precipitation']
+        vis = curr['visibility']
+        wind = curr['wind_speed_10m']
         
-        analysis = []
-        risk_level = "Normaali"
-        braking_dist = "Normaali"
+        analysis = ["✅ Ajokeli on tällä hetkellä vakaa."]
+        risk = "Normaali"
+        brake = "Normaali"
 
-        # 1. Liukkaustutka
-        if temp > -1 and temp < 1.5 and precip > 0:
-            analysis.append("⚠️ MUSTAN JÄÄN VAARA: Lämpötila nollassa ja sataa vettä!")
-            risk_level = "KORKEA"
-            braking_dist = "Erittäin pitkä (liukasta)"
-        elif temp < 0 and snow > 0:
-            analysis.append("❄️ LUMISADE: Tie on liukas ja sohjoutuu.")
-            risk_level = "KOHONNUT"
-            braking_dist = "Pidentynyt (lumi)"
-        
-        # 2. Sumu ja näkyvyys
-        if vis < 400:
-            analysis.append("🌫️ VAARALLINEN SUMU: Näkyvyys lähes nolla!")
-            risk_level = "VAARALLINEN"
-        elif vis < 1500:
-            analysis.append("🌫️ HEIKKO NÄKYVYYS: Sumua tai rankkasadetta.")
-
-        # 3. Myrsky ja ukkonen
-        if code in [95, 96, 99]:
-            analysis.append("⚡ UKKOSMYRSKY: Voimakas salamointi mahdollista.")
-            risk_level = "KORKEA"
-
-        if not analysis:
-            analysis.append("✅ Ajokeli on tällä hetkellä vakaa.")
+        if temp < 1 and prec > 0:
+            analysis = ["⚠️ MUSTAN JÄÄN VAARA: Tie on erittäin liukas!"]
+            risk = "KORKEA"
+            brake = "4x Pitempi"
+        elif vis < 1000:
+            analysis = ["🌫️ HUONO NÄKYVYYS: Sumua tai rankkaa sadetta."]
+            risk = "KOHONNUT"
+            brake = "Varovasti"
 
         return jsonify({
-            "temp": temp,
-            "analysis": analysis,
-            "risk_level": risk_level,
-            "braking": braking_dist,
-            "wind": wind
+            "temp": temp, "analysis": analysis, "risk_level": risk, "braking": brake, "wind": wind
         })
-    except Exception as e:
-        return jsonify({"analysis": ["Sääpalveluun ei saada yhteyttä"], "risk_level": "Normaali", "temp": "--"})
+    except:
+        return jsonify({"temp": "--", "analysis": ["Sää-AI yhteysvirhe"], "risk_level": "Normaali"})
 
-# --- STAATTISET TIEDOSTOT ---
-
-@app.route('/')
-def serve_index():
-    return send_from_directory(os.path.join(app.root_path, '../'), 'index.html')
-
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def catch_all(path):
+    return send_from_directory(app.static_folder, 'index.html')
