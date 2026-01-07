@@ -3,28 +3,26 @@ from flask_cors import CORS
 import feedparser
 import requests
 import re
-import os
 from datetime import datetime
 
-# Vercel-ympäristössä static_folder pitää osoittaa juureen, jotta index.html löytyy
 app = Flask(__name__, static_folder='../')
 CORS(app)
 
-# --- GLOBAALIT LÄHTEET ---
-# Nämä agentit vahtivat eri maita erikseen
+# --- GLOBAL INTELLIGENCE SOURCES ---
 SOURCES = {
     "FI": {
         "Poliisi": "https://poliisi.fi/ajankohtaista/uutiset/-/asset_publisher/vK9pUnk5iI9i/rss",
-        "112_Vaara": "https://112.fi/vaaratiedotteet-rss",
-        "Sähkökatkot": "https://www.fingrid.fi/sharepoint/syotteet/hairiotiedotteet-rss"
+        "Hätätiedotteet": "https://112.fi/vaaratiedotteet-rss",
+        "Sähköverkko": "https://www.fingrid.fi/sharepoint/syotteet/hairiotiedotteet-rss",
+        "Infra": "https://www.hsy.fi/vesi-ja-viemarit/tiedotteet/rss/"
     },
     "SE": {
         "Polisen": "https://polisen.se/aktuellt/rss/hela-landet/handelser-rss/",
         "Krisinfo": "https://api.krisinformation.se/v1/feed?format=rss"
     },
     "US": {
-        "USGS_Quakes": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.atom",
-        "Weather_Alerts": "https://alerts.weather.gov/cap/us.php?x=1"
+        "Safety": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.atom",
+        "Weather": "https://alerts.weather.gov/cap/us.php?x=1"
     }
 }
 
@@ -35,69 +33,68 @@ def get_feed():
     all_events = []
     seen = set()
 
+    # AI-AVAINSONAT ERI KATEGORIOILLE
+    CRIME_WORDS = ["ryöstö", "väkivalta", "puukotus", "robbery", "assault", "stabbing", "rån", "misshandel", "ase", "weapon"]
+    POWER_WORDS = ["sähkökatko", "power outage", "blackout", "strömavbrott", "elavbrott"]
+    WATER_WORDS = ["vesikatko", "water outage", "vattentiedote"]
+
     for name, url in sources.items():
         try:
             feed = feedparser.parse(url)
             for entry in feed.entries:
-                title = entry.title
-                if title not in seen:
-                    # AI-tunnistus sähkökatkoille (Suomi, Ruotsi, Englanti)
-                    outage_words = ["sähkökatko", "power outage", "blackout", "strömavbrott", "elavbrott"]
-                    is_outage = any(word in title.lower() for word in outage_words)
+                if entry.title not in seen:
+                    t_lc = entry.title.lower()
+                    category = "INFO"
+                    reason = ""
                     
+                    if any(x in t_lc for x in CRIME_WORDS):
+                        category = "STREET_CRIME"
+                        reason = "Katurikollisuuden riski: Alueella raportoitu väkivaltaa tai ryöstö."
+                    elif any(x in t_lc for x in POWER_WORDS):
+                        category = "POWER"
+                        reason = "Sähköverkon häiriö alueella."
+                    elif any(x in t_lc for x in WATER_WORDS):
+                        category = "WATER"
+                        reason = "Vesikatko tai vesihuollon häiriö."
+                    elif "vaara" in t_lc or "danger" in t_lc or "fara" in t_lc:
+                        category = "DANGER"
+                        reason = "Yleinen vaaratiedote."
+
                     all_events.append({
-                        "id": entry.get('link', title),
                         "source": name,
-                        "title": title,
-                        "is_outage": is_outage,
-                        "time": datetime.now().strftime("%H:%M")
+                        "title": entry.title,
+                        "category": category,
+                        "reason": reason,
+                        "time": datetime.now().strftime("%H:%M"),
+                        "urgent": category in ["STREET_CRIME", "DANGER", "POWER"]
                     })
-                    seen.add(title)
-        except Exception as e:
-            continue
-            
-    # Palautetaan vain tuoreimmat uutiset
-    return jsonify(all_events[:40])
+                    seen.add(entry.title)
+        except: continue
+    return jsonify(all_events)
 
 @app.route('/api/weather_analysis')
 def weather_analysis():
     lat = request.args.get('lat', type=float)
     lon = request.args.get('lon', type=float)
     lang = request.args.get('lang', default='fi')
-    
     try:
-        # Haetaan sää Open-Meteo API:sta
-        w_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,precipitation,weather_code,visibility&forecast_days=1"
+        w_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,precipitation,visibility&forecast_days=1"
         r = requests.get(w_url).json()
         curr = r['current']
         
-        # Monikieliset AI-viestit
-        translations = {
+        msgs = {
             "fi": ["✅ Kaikki kunnossa", "⚠️ Liukas tie", "🌫️ Huono näkyvyys"],
-            "en": ["✅ All clear", "⚠️ Slippery roads", "🌫️ Low visibility"],
+            "en": ["✅ All clear", "⚠️ Slippery road", "🌫️ Low visibility"],
             "sv": ["✅ Allt lugnt", "⚠️ Hal väg", "🌫️ Dålig sikt"]
         }
-        
-        m = translations.get(lang, translations["en"])
-        msg = m[0]
-        if curr['temperature_2m'] < 1 and curr['precipitation'] > 0:
-            msg = m[1]
-        elif curr['visibility'] < 1000:
-            msg = m[2]
+        m_list = msgs.get(lang, msgs["en"])
+        msg = m_list[0]
+        if curr['temperature_2m'] < 1 and curr['precipitation'] > 0: msg = m_list[1]
+        elif curr['visibility'] < 1000: msg = m_list[2]
+        return jsonify({"temp": curr['temperature_2m'], "analysis": msg})
+    except: return jsonify({"temp": "--", "analysis": "N/A"})
 
-        return jsonify({
-            "temp": curr['temperature_2m'],
-            "analysis": msg,
-            "precip": curr['precipitation']
-        })
-    except:
-        return jsonify({"temp": "--", "analysis": "N/A"})
-
-# Tärkeä reitti: Jos osoite ei ole /api, lähetetään index.html
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def catch_all(path):
     return send_from_directory(app.static_folder, 'index.html')
-
-if __name__ == "__main__":
-    app.run()
