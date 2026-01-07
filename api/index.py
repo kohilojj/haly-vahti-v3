@@ -6,11 +6,11 @@ import re
 import os
 from datetime import datetime
 
-# Flask etsii tiedostoja kansion ulkopuolelta static_folder='../' avulla
+# Asetetaan static_folder juureen, jotta Flask löytää index.html:n
 app = Flask(__name__, static_folder='../')
 CORS(app)
 
-# --- TIETOLÄHTEET ---
+# --- GLOBAALIT TIETOLÄHTEET ---
 SOURCES = {
     "FI": {
         "Poliisi": "https://poliisi.fi/ajankohtaista/uutiset/-/asset_publisher/vK9pUnk5iI9i/rss",
@@ -22,7 +22,7 @@ SOURCES = {
         "Krisinfo": "https://api.krisinformation.se/v1/feed?format=rss"
     },
     "US": {
-        "USGS_Quakes": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.atom",
+        "Safety": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.atom",
         "Weather_Alerts": "https://alerts.weather.gov/cap/us.php?x=1"
     }
 }
@@ -39,7 +39,10 @@ def get_feed():
             feed = feedparser.parse(url)
             for entry in feed.entries:
                 if entry.title not in seen:
-                    is_outage = any(x in entry.title.lower() for x in ["sähkökatko", "power outage", "blackout"])
+                    # Sähkökatko-tunnistus AI-avainsanoilla
+                    outage_keywords = ["sähkökatko", "power outage", "blackout", "strömavbrott"]
+                    is_outage = any(x in entry.title.lower() for x in outage_keywords)
+                    
                     all_events.append({
                         "source": name,
                         "title": entry.title,
@@ -60,11 +63,10 @@ def weather_analysis():
         r = requests.get(w_url).json()
         curr = r['current']
         
-        # Kansainvälinen AI-viesti
         messages = {
-            "fi": ["✅ Kaikki kunnossa", "⚠️ Liukas tie", "🌫️ Sumua"],
-            "en": ["✅ All clear", "⚠️ Slippery road", "🌫️ Foggy"],
-            "sv": ["✅ Allt lugnt", "⚠️ Hal väg", "🌫️ Dimma"]
+            "fi": ["✅ Kaikki kunnossa", "⚠️ Liukas tie", "🌫️ Huono näkyvyys"],
+            "en": ["✅ All clear", "⚠️ Slippery roads", "🌫️ Low visibility"],
+            "sv": ["✅ Allt lugnt", "⚠️ Hal väg", "🌫️ Dålig sikt"]
         }
         m_list = messages.get(lang, messages["en"])
         msg = m_list[0]
@@ -75,11 +77,9 @@ def weather_analysis():
     except:
         return jsonify({"temp": "--", "analysis": "Error"})
 
-# TÄMÄ REIPASTI KORJATTU REITITYS
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def catch_all(path):
-    # Jos pyyntö ei ole API, tarjoillaan index.html juuresta
     return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == "__main__":
