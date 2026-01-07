@@ -3,300 +3,143 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PRO-VAHTI V4 | MISSION CONTROL</title>
-    
+    <title>GLOBAL PRO-VAHTI</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-
     <style>
-        :root {
-            --accent: #007aff;
-            --danger: #ff3b30;
-            --warning: #ffcc00;
-            --bg: #000000;
-            --card-bg: #1c1c1e;
-            --text-main: #ffffff;
-            --text-dim: #8e8e93;
-        }
-
-        body {
-            background-color: var(--bg);
-            color: var(--text-main);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 0;
-            overflow-x: hidden;
-            -webkit-font-smoothing: antialiased;
-        }
-
-        /* --- Header & Navigation --- */
-        header {
-            padding: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: rgba(28, 28, 30, 0.8);
-            backdrop-filter: blur(10px);
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            border-bottom: 0.5px solid #333;
-        }
-
-        .logo-group { display: flex; align-items: center; gap: 10px; }
-        .logo-group h1 { font-size: 1.2em; margin: 0; letter-spacing: -0.5px; }
-        .live-dot { width: 8px; height: 8px; background: var(--danger); border-radius: 50%; animation: pulse 1.5s infinite; }
-
-        /* --- Dashboard Widgets --- */
-        .dashboard { padding: 15px; display: grid; gap: 12px; }
-
-        .ai-panel {
-            background: linear-gradient(145deg, #1c1c1e, #0c0c0e);
-            border-radius: 20px;
-            padding: 20px;
-            border: 1px solid #2c2c2e;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 0.7em;
-            font-weight: bold;
-            text-transform: uppercase;
-            margin-bottom: 10px;
-        }
-
-        .risk-Normaali { background: rgba(48, 209, 88, 0.2); color: #30d158; }
-        .risk-KORKEA, .risk-VAARALLINEN { background: rgba(255, 59, 48, 0.2); color: #ff3b30; border: 1px solid #ff3b30; }
-
-        /* --- Kartta --- */
-        #map {
-            height: 250px;
-            width: calc(100% - 30px);
-            margin: 0 15px;
-            border-radius: 20px;
-            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
-            border: 1px solid #2c2c2e;
-        }
-
-        /* --- Feed --- */
-        .feed-container { padding: 15px; }
-        .section-header { font-size: 0.8em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin: 20px 0 10px 0; display: flex; align-items: center; gap: 10px; }
-        .section-header::after { content: ""; flex: 1; height: 1px; background: #2c2c2e; }
-
-        .alert-card {
-            background: var(--card-bg);
-            border-radius: 16px;
-            padding: 18px;
-            margin-bottom: 12px;
-            border: 1px solid #2c2c2e;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            animation: slideIn 0.3s ease-out;
-        }
-
-        .alert-card.near { border-left: 6px solid var(--danger); }
-        .alert-card.missing { border-left: 6px solid var(--warning); border-style: solid; }
+        :root { --accent: #007aff; --bg: #000; --card: #1c1c1e; }
+        body { background: var(--bg); color: #fff; font-family: -apple-system, sans-serif; margin: 0; overflow: hidden; }
         
-        .source-tag { font-size: 0.7em; color: var(--accent); font-weight: bold; }
-        .time-tag { font-size: 0.7em; color: var(--text-dim); float: right; }
-
-        /* --- Asetukset (Slide-up menu) --- */
-        #settings-panel {
-            position: fixed; bottom: 0; left: 0; right: 0;
-            background: #1c1c1e; border-top-left-radius: 25px; border-top-right-radius: 25px;
-            padding: 30px; transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.1, 0.7, 1.0, 0.1);
-            z-index: 2000; box-shadow: 0 -10px 40px rgba(0,0,0,0.8);
+        /* Side Menu */
+        #side-menu {
+            position: fixed; left: -280px; top: 0; bottom: 0; width: 250px;
+            background: #111; z-index: 10001; transition: 0.3s; padding: 20px;
+            border-right: 1px solid #333;
         }
-        #settings-panel.open { transform: translateY(0); }
-        .settings-handle { width: 40px; height: 5px; background: #333; border-radius: 10px; margin: -15px auto 20px auto; }
+        #side-menu.open { left: 0; }
+        .menu-item { padding: 15px 0; border-bottom: 1px solid #222; cursor: pointer; display: flex; align-items: center; gap: 10px; }
 
-        /* --- Alku-ruutu --- */
-        #overlay {
-            position: fixed; inset: 0; background: #000; z-index: 9999;
-            display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 40px;
+        /* Connection Warning */
+        #net-warning {
+            display: none; background: #ff3b30; color: white; text-align: center;
+            padding: 5px; font-size: 0.8em; font-weight: bold;
         }
 
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
-        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-        input[type=range] { width: 100%; height: 6px; border-radius: 5px; background: #333; accent-color: var(--accent); }
+        #setup-screen { position: fixed; inset: 0; background: #000; z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
+        .btn { background: var(--accent); color: white; border: none; padding: 15px 30px; border-radius: 12px; font-weight: bold; width: 250px; margin: 10px; }
+        
+        #map { height: 250px; margin: 15px; border-radius: 15px; filter: invert(100%) hue-rotate(180deg); }
+        .outage-alert { border-left: 6px solid #ff9500 !important; background: #2a1a00 !important; }
     </style>
 </head>
 <body>
 
-<div id="overlay">
-    <div class="live-dot" style="width:50px; height:50px; margin-bottom: 20px;"></div>
-    <h1 style="font-size: 2em; margin: 0;">PRO-VAHTI</h1>
-    <p style="color: var(--text-dim);">Viranomaistiedot & Sää-analyysi</p>
-    <br><br>
-    <button onclick="initApp()" style="background:var(--accent); color:white; border:none; padding: 20px 60px; border-radius: 40px; font-weight:bold; font-size: 1.1em;">AKTIVOI JÄRJESTELMÄ</button>
+<div id="net-warning">⚠️ YHTEYSVIRHE: AI analysoi syytä... (Heikko signaali)</div>
+
+<div id="side-menu">
+    <h3>Valikko</h3>
+    <div class="menu-item" onclick="showTerms()"><i class="fa-solid fa-file-contract"></i> Käyttöehdot</div>
+    <div class="menu-item" onclick="location.reload()"><i class="fa-solid fa-rotate"></i> Resetoi sovellus</div>
+    <p style="font-size: 0.6em; color: #444; position: absolute; bottom: 20px;">v4.0 Global AI Edition</p>
 </div>
 
-<header>
-    <div class="logo-group">
-        <div class="live-dot"></div>
-        <h1>MISSION CONTROL</h1>
+<div id="setup-screen">
+    <h1>GLOBAL AI VAHTI</h1>
+    <select id="country" style="padding:15px; width:250px; border-radius:10px; background:#222; color:white;">
+        <option value="FI">Suomi</option>
+        <option value="SE">Sverige</option>
+        <option value="US">USA</option>
+    </select>
+    <select id="lang" style="padding:15px; width:250px; border-radius:10px; background:#222; color:white; margin: 10px;">
+        <option value="fi">Suomi</option>
+        <option value="en">English</option>
+        <option value="sv">Svenska</option>
+    </select>
+    <div style="font-size: 0.7em; color: #666; margin: 15px; max-width: 250px;">
+        Hyväksyn, että sovellus käyttää GPS-tietoja ja AI-analyysia turvallisuuden parantamiseksi.
     </div>
-    <i class="fa-solid fa-sliders gear-icon" onclick="toggleSettings()" style="font-size: 1.2em; color: var(--text-dim);"></i>
-</header>
-
-<div class="dashboard">
-    <div class="ai-panel" id="weather-widget">
-        <div id="risk-badge" class="status-badge risk-Normaali">Ympäristö OK</div>
-        <div style="display: flex; justify-content: space-between; align-items: baseline;">
-            <div id="ai-main-msg" style="font-size: 1.1em; font-weight: bold; max-width: 70%;">Analysoidaan...</div>
-            <div id="main-temp" style="font-size: 2.2em; font-weight: 200;">--°</div>
-        </div>
-        <div style="display: flex; gap: 15px; margin-top: 15px; font-size: 0.8em; color: var(--text-dim);">
-            <span><i class="fa-solid fa-car-burst"></i> Jarrutus: <b id="brake-info" style="color:white">-</b></span>
-            <span><i class="fa-solid fa-wind"></i> Tuuli: <b id="wind-info" style="color:white">-</b></span>
-        </div>
-    </div>
+    <button class="btn" onclick="launch()">HYVÄKSY JA ALOITA</button>
 </div>
 
-<div id="map"></div>
+<div id="app-content" style="display:none;">
+    <header style="padding: 15px; display: flex; justify-content: space-between; align-items: center; background: #111;">
+        <i class="fa-solid fa-bars" onclick="document.getElementById('side-menu').classList.toggle('open')"></i>
+        <b id="status-text">AI AKTIIVINEN</b>
+        <div id="temp-badge">--°</div>
+    </header>
 
-<div class="feed-container">
-    <div class="section-header">Poliisi & Kadonneet</div>
-    <div id="missing-feed"></div>
-
-    <div class="section-header">Liikenne & Hälytykset</div>
-    <div id="main-feed"></div>
-</div>
-
-<div id="settings-panel">
-    <div class="settings-handle"></div>
-    <h2 style="margin-top: 0;">Asetukset</h2>
-    <div style="margin: 25px 0;">
-        <label style="color:var(--text-dim); font-size: 0.8em;">PUHENOPEUS</label>
-        <input type="range" id="voice-rate" min="0.5" max="1.5" step="0.1" value="0.9">
-    </div>
-    <div style="margin: 25px 0;">
-        <label style="color:var(--text-dim); font-size: 0.8em;">ÄÄNENVOIMAKKUUS</label>
-        <input type="range" id="voice-vol" min="0" max="1" step="0.1" value="0.8">
-    </div>
-    <button onclick="toggleSettings()" style="width:100%; padding: 15px; border-radius: 15px; border:none; background: #333; color:white; font-weight:bold;">SULJE</button>
+    <div id="map"></div>
+    <div id="feed" style="padding: 15px;"></div>
 </div>
 
 <script>
-    let map, userMarker, myCity = "";
-    let processedIds = new Set();
-    const synth = window.speechSynthesis;
-    let config = { rate: 0.9, vol: 0.8 };
+    let config = { country: 'FI', lang: 'fi' };
+    let synth = window.speechSynthesis;
 
-    // --- ALUSTUS ---
-    async function initApp() {
-        document.getElementById('overlay').style.opacity = '0';
-        setTimeout(() => document.getElementById('overlay').style.display = 'none', 500);
-        
-        // Puhutaan tervetuloviesti (inhimillisempi)
-        speak("Järjestelmä aktivoitu. Valvotaan ympäristöä.");
-
-        initMap();
-        updateAll();
-        setInterval(updateAll, 20000); // 20 sekunnin sykli
+    function launch() {
+        config.country = document.getElementById('country').value;
+        config.lang = document.getElementById('lang').value;
+        document.getElementById('setup-screen').style.display = 'none';
+        document.getElementById('app-content').style.display = 'block';
+        initApp();
     }
 
-    function initMap() {
-        navigator.geolocation.watchPosition(pos => {
+    function initApp() {
+        // Yhteysvahti
+        window.addEventListener('offline', () => {
+            document.getElementById('net-warning').style.display = 'block';
+            speak(config.lang === 'fi' ? "Yhteys katkesi. AI tarkistaa reititintä." : "Connection lost.");
+        });
+        window.addEventListener('online', () => {
+            document.getElementById('net-warning').style.display = 'none';
+        });
+
+        navigator.geolocation.getCurrentPosition(pos => {
             const { latitude, longitude } = pos.coords;
-            if (!map) {
-                map = L.map('map', {zoomControl: false, attributionControl: false}).setView([latitude, longitude], 12);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-                userMarker = L.circleMarker([latitude, longitude], {radius: 8, color: '#007aff', fillOpacity: 1, weight: 3}).addTo(map);
+            let map = L.map('map', {zoomControl:false}).setView([latitude, longitude], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            updateLoop(latitude, longitude);
+        });
+    }
+
+    async function updateLoop(lat, lon) {
+        // Sää-AI
+        const wr = await fetch(`/api/weather_analysis?lat=${lat}&lon=${lon}&lang=${config.lang}`);
+        const wd = await wr.json();
+        document.getElementById('temp-badge').innerText = Math.round(wd.temp) + "°";
+        document.getElementById('status-text').innerText = wd.analysis;
+
+        // Hälytykset
+        const fr = await fetch(`/api/full_feed?country=${config.country}`);
+        const fd = await fr.json();
+        const container = document.getElementById('feed');
+        container.innerHTML = '';
+        
+        fd.forEach(item => {
+            const card = document.createElement('div');
+            card.className = `alert-card ${item.is_outage ? 'outage-alert' : ''}`;
+            card.style = "background:#1c1c1e; padding:15px; margin-bottom:10px; border-radius:12px; border:1px solid #333;";
+            card.innerHTML = `<small style="color:var(--accent)">${item.source}</small><div>${item.title}</div>`;
+            container.appendChild(card);
+            
+            if (item.is_outage) {
+                speak(config.lang === 'fi' ? "Sähkökatko havaittu lähialueella." : "Power outage detected.");
             }
-            userMarker.setLatLng([latitude, longitude]);
-            if (!myCity) fetchCity(latitude, longitude);
-        }, null, { enableHighAccuracy: false });
+        });
+        
+        setTimeout(() => updateLoop(lat, lon), 40000);
     }
 
-    async function fetchCity(lat, lon) {
-        try {
-            const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=fi`);
-            const d = await r.json();
-            myCity = d.city || d.locality;
-        } catch(e) { myCity = "Suomi"; }
-    }
-
-    // --- TIEDONHAKU ---
-    function updateAll() {
-        fetchFeed();
-        fetchWeather();
-    }
-
-    async function fetchFeed() {
-        try {
-            const r = await fetch('/api/full_feed');
-            const data = await r.json();
-            data.reverse().forEach(item => {
-                if (!processedIds.has(item.id)) {
-                    processedIds.add(item.id);
-                    renderItem(item);
-                }
-            });
-        } catch(e) {}
-    }
-
-    async function fetchWeather() {
-        try {
-            const pos = userMarker.getLatLng();
-            const r = await fetch(`/api/weather_analysis?lat=${pos.lat}&lon=${pos.lng}`);
-            const d = await r.json();
-            
-            document.getElementById('main-temp').innerText = Math.round(d.temp) + "°";
-            document.getElementById('ai-main-msg').innerText = d.analysis[0];
-            document.getElementById('brake-info').innerText = d.braking;
-            document.getElementById('wind-info').innerText = d.wind + " m/s";
-            
-            const badge = document.getElementById('risk-badge');
-            badge.innerText = d.risk_level === "Normaali" ? "Ympäristö OK" : d.risk_level;
-            badge.className = `status-badge risk-${d.risk_level}`;
-
-            if (d.risk_level !== "Normaali") speak("Varoitus. " + d.analysis[0]);
-        } catch(e) {}
-    }
-
-    // --- UI RENDERÖINTI ---
-    function renderItem(item) {
-        const titleLC = item.title.toLowerCase();
-        const isMissing = titleLC.includes("kadonnut") || titleLC.includes("etsitään");
-        const isNear = myCity && titleLC.includes(myCity.toLowerCase());
-
-        const card = document.createElement('div');
-        card.className = `alert-card ${isNear ? 'near' : ''} ${isMissing ? 'missing' : ''}`;
-        card.innerHTML = `
-            <div>
-                <span class="source-tag">${item.source}</span>
-                <span class="time-tag">${new Date().toLocaleTimeString('fi-FI', {hour:'2-digit', minute:'2-digit'})}</span>
-            </div>
-            <div style="font-weight: 600; line-height: 1.4;">${item.title}</div>
-        `;
-
-        const target = isMissing ? 'missing-feed' : 'main-feed';
-        document.getElementById(target).prepend(card);
-
-        if (isNear || isMissing || item.is_priority) {
-            speak(isNear ? `Hälytys lähellä. ${item.title}` : item.title);
-        }
-    }
-
-    // --- APUFUNKTIOT ---
     function speak(text) {
         synth.cancel();
         const u = new SpeechSynthesisUtterance(text);
-        u.lang = 'fi-FI';
-        u.rate = document.getElementById('voice-rate').value;
-        u.volume = document.getElementById('voice-vol').value;
-        u.pitch = 1.0;
+        u.lang = config.lang === 'fi' ? 'fi-FI' : (config.lang === 'sv' ? 'sv-SE' : 'en-US');
         synth.speak(u);
     }
 
-    function toggleSettings() {
-        document.getElementById('settings-panel').classList.toggle('open');
+    function showTerms() {
+        alert("KÄYTTÖEHDOT:\n1. Sovellus tarjoaa vain suuntaa-antavaa tietoa.\n2. Älä käytä sovellusta ajaessasi käsin.\n3. AI-analyysi perustuu julkisiin lähteisiin.");
     }
 </script>
 </body>
