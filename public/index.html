@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HÄLYTYSVAHTI PRO LIVE</title>
+    <style>
+        :root { --danger: #ff0000; --road: #00ff00; --bg: #050505; }
+        body { background: var(--bg); color: white; font-family: sans-serif; margin: 0; text-align: center; }
+        .header { background: #111; padding: 20px; border-bottom: 2px solid #333; }
+        .status { font-size: 0.8em; color: #888; margin-top: 5px; }
+        .container { padding: 15px; max-width: 600px; margin: 0 auto; }
+        .card { background: #1a1a1a; border-radius: 10px; padding: 15px; margin-bottom: 15px; border-left: 6px solid #444; text-align: left; }
+        .card.near { border-left-color: var(--danger); background: #200; }
+        .card.highway { border-left-color: var(--road); border: 1px solid var(--road); }
+        button#start { width: 100%; padding: 25px; background: #007bff; color: white; border: none; font-weight: bold; font-size: 1.3em; border-radius: 12px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 style="margin:0; font-size: 1.2em;">🚨 VIRANOMAISVAHTI GPS</h1>
+        <div id="status">Paina nappia aloittaaksesi seuranta</div>
+    </div>
+    <div class="container">
+        <button id="start" onclick="startApp()">AKTIVOI LIVE-VALVONTA</button>
+        <div id="feed"></div>
+    </div>
+<script>
+    let userCity = ""; let seen = new Set(); const synth = window.speechSynthesis;
+    
+    async function startApp() {
+        document.getElementById('start').style.display = 'none';
+        document.getElementById('status').innerText = "Haetaan sijaintia...";
+        
+        if (navigator.geolocation) {
+            navigator.geolocation.watchPosition(async (pos) => {
+                document.getElementById('status').innerText = `GPS Aktiivinen: ${pos.coords.latitude.toFixed(2)}, ${pos.coords.longitude.toFixed(2)}`;
+                if (!userCity) {
+                    try {
+                        const r = await fetch('https://ipapi.co/json/');
+                        const d = await r.json();
+                        userCity = d.city;
+                    } catch(e) { userCity = "Suomi"; }
+                }
+            });
+        }
+        setInterval(update, 15000); update();
+    }
+
+    async function update() {
+        try {
+            const r = await fetch('/api/full_feed');
+            const data = await r.json();
+            data.reverse().forEach(item => {
+                if (!seen.has(item.id)) {
+                    const t = item.title.toLowerCase();
+                    const s = item.summary.toLowerCase();
+                    // Tunnistaa moottoritiet (Vt1, E18, jne)
+                    const isHwy = /(vt\d+|e\d+|valtatie|kehä|moottoritie)/i.test(t);
+                    // Tunnistaa paikalliset hälytykset
+                    const isLocal = userCity && (t.includes(userCity.toLowerCase()) || s.includes(userCity.toLowerCase()));
+
+                    if (isHwy || isLocal || item.source === "VAARA") {
+                        seen.add(item.id);
+                        render(item, isHwy, isLocal);
+                        speak(item, isHwy, isLocal);
+                    }
+                }
+            });
+        } catch(e) { console.error("Yhteysvirhe"); }
+    }
+
+    function render(item, h, l) {
+        const f = document.getElementById('feed'); const c = document.createElement('div');
+        c.className = `card ${l ? 'near' : ''} ${h ? 'highway' : ''}`;
+        c.innerHTML = `<strong>${item.source}</strong><h3>${item.title}</h3><p>${item.summary}</p>`;
+        f.prepend(c);
+    }
+
+    function speak(item, h, l) {
+        let msg = h ? `Tie-ilmoitus: ${item.title}` : `Hälytys lähelläsi: ${item.title}`;
+        if (item.source === "VAARA") msg = `VAARATIEDOTE: ${item.title}`;
+        const u = new SpeechSynthesisUtterance(msg); u.lang = 'fi-FI'; synth.speak(u);
+    }
+</script>
+</body>
+</html>
