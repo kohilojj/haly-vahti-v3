@@ -6,10 +6,11 @@ import re
 import os
 from datetime import datetime
 
+# Flask etsii tiedostoja kansion ulkopuolelta static_folder='../' avulla
 app = Flask(__name__, static_folder='../')
 CORS(app)
 
-# MAAKOHTAISET LÄHTEET (Pidetään erillään)
+# --- TIETOLÄHTEET ---
 SOURCES = {
     "FI": {
         "Poliisi": "https://poliisi.fi/ajankohtaista/uutiset/-/asset_publisher/vK9pUnk5iI9i/rss",
@@ -21,7 +22,7 @@ SOURCES = {
         "Krisinfo": "https://api.krisinformation.se/v1/feed?format=rss"
     },
     "US": {
-        "Safety": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.atom",
+        "USGS_Quakes": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.atom",
         "Weather_Alerts": "https://alerts.weather.gov/cap/us.php?x=1"
     }
 }
@@ -30,7 +31,6 @@ SOURCES = {
 def get_feed():
     country = request.args.get('country', default='FI')
     sources = SOURCES.get(country, SOURCES["FI"])
-    
     all_events = []
     seen = set()
 
@@ -38,18 +38,15 @@ def get_feed():
         try:
             feed = feedparser.parse(url)
             for entry in feed.entries:
-                title = entry.title
-                if title not in seen:
-                    # Sähkökatko-analyysi
-                    is_power_outage = any(x in title.lower() for x in ["sähkökatko", "strömavbrott", "power outage", "blackout"])
-                    
+                if entry.title not in seen:
+                    is_outage = any(x in entry.title.lower() for x in ["sähkökatko", "power outage", "blackout"])
                     all_events.append({
                         "source": name,
-                        "title": title,
-                        "is_outage": is_power_outage,
+                        "title": entry.title,
+                        "is_outage": is_outage,
                         "time": datetime.now().strftime("%H:%M")
                     })
-                    seen.add(title)
+                    seen.add(entry.title)
         except: continue
     return jsonify(all_events)
 
@@ -58,7 +55,6 @@ def weather_analysis():
     lat = request.args.get('lat', type=float)
     lon = request.args.get('lon', type=float)
     lang = request.args.get('lang', default='fi')
-    
     try:
         w_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,precipitation,weather_code,visibility&forecast_days=1"
         r = requests.get(w_url).json()
@@ -66,11 +62,10 @@ def weather_analysis():
         
         # Kansainvälinen AI-viesti
         messages = {
-            "fi": ["✅ Kaikki kunnossa", "⚠️ Liukas tie", "🌫️ Huono näkyvyys"],
-            "en": ["✅ All clear", "⚠️ Slippery road", "🌫️ Low visibility"],
-            "sv": ["✅ Allt lugnt", "⚠️ Hal väg", "🌫️ Dålig sikt"]
+            "fi": ["✅ Kaikki kunnossa", "⚠️ Liukas tie", "🌫️ Sumua"],
+            "en": ["✅ All clear", "⚠️ Slippery road", "🌫️ Foggy"],
+            "sv": ["✅ Allt lugnt", "⚠️ Hal väg", "🌫️ Dimma"]
         }
-        
         m_list = messages.get(lang, messages["en"])
         msg = m_list[0]
         if curr['temperature_2m'] < 1 and curr['precipitation'] > 0: msg = m_list[1]
@@ -79,3 +74,13 @@ def weather_analysis():
         return jsonify({"temp": curr['temperature_2m'], "analysis": msg})
     except:
         return jsonify({"temp": "--", "analysis": "Error"})
+
+# TÄMÄ REIPASTI KORJATTU REITITYS
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def catch_all(path):
+    # Jos pyyntö ei ole API, tarjoillaan index.html juuresta
+    return send_from_directory(app.static_folder, 'index.html')
+
+if __name__ == "__main__":
+    app.run()
