@@ -3,84 +3,185 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HÄLYTYSVAHTI PRO LIVE</title>
+    <title>HÄLYTYSVAHTI KARTTA-LIVE</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <style>
-        :root { --danger: #ff0000; --road: #00ff00; --bg: #050505; }
-        body { background: var(--bg); color: white; font-family: sans-serif; margin: 0; text-align: center; }
-        .header { background: #111; padding: 20px; border-bottom: 2px solid #333; }
-        .status { font-size: 0.8em; color: #888; margin-top: 5px; }
-        .container { padding: 15px; max-width: 600px; margin: 0 auto; }
-        .card { background: #1a1a1a; border-radius: 10px; padding: 15px; margin-bottom: 15px; border-left: 6px solid #444; text-align: left; }
-        .card.near { border-left-color: var(--danger); background: #200; }
-        .card.highway { border-left-color: var(--road); border: 1px solid var(--road); }
-        button#start { width: 100%; padding: 25px; background: #007bff; color: white; border: none; font-weight: bold; font-size: 1.3em; border-radius: 12px; cursor: pointer; }
+        :root { 
+            --danger: #ff1111; 
+            --highway: #00ff00; 
+            --street: #00ccff; 
+            --bg: #0a0a0a; 
+        }
+        body { background: var(--bg); color: #fff; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; }
+        
+        .header { 
+            background: #151515; padding: 15px; border-bottom: 2px solid #333; 
+            text-align: center; z-index: 1000;
+        }
+
+        /* Kartan tyyli */
+        #map { 
+            height: 40vh; /* Vie 40% näytön korkeudesta */
+            width: 100%;
+            border-bottom: 2px solid #333;
+        }
+
+        .container { padding: 15px; max-width: 700px; margin: 0 auto; }
+        
+        .alert-card {
+            background: #1e1e1e; border-radius: 12px; padding: 15px; margin-bottom: 15px;
+            border-left: 8px solid #444; position: relative;
+        }
+        .alert-card.highway { border-left-color: var(--highway); }
+        .alert-card.local { border-left-color: var(--street); }
+        .alert-card.danger { border-left-color: var(--danger); }
+
+        #start-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); z-index: 2000;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+
+        #start-btn {
+            padding: 25px 50px; background: #007bff; color: white;
+            border: none; font-weight: bold; font-size: 1.2em; border-radius: 50px; cursor: pointer;
+        }
+
+        .status-bar { font-size: 0.8em; color: #888; padding: 5px; text-align: center; background: #111; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1 style="margin:0; font-size: 1.2em;">🚨 VIRANOMAISVAHTI GPS</h1>
-        <div id="status">Paina nappia aloittaaksesi seuranta</div>
+
+<div id="start-overlay">
+    <h1 style="color: #007bff;">Viranomaisvahti Pro</h1>
+    <p>Aktivoi GPS ja Kartta-Live</p>
+    <button id="start-btn" onclick="startApp()">ALOITA SEURANTA</button>
+</div>
+
+<div class="header">
+    <h2 style="margin: 0; font-size: 1.1em;">🚨 GPS KARTTA-LIVE</h2>
+</div>
+
+<div id="map"></div>
+<div class="status-bar" id="gps-status">GPS odottaa...</div>
+
+<div class="container" id="feed">
     </div>
-    <div class="container">
-        <button id="start" onclick="startApp()">AKTIVOI LIVE-VALVONTA</button>
-        <div id="feed"></div>
-    </div>
+
 <script>
-    let userCity = ""; let seen = new Set(); const synth = window.speechSynthesis;
-    
-    async function startApp() {
-        document.getElementById('start').style.display = 'none';
-        document.getElementById('status').innerText = "Haetaan sijaintia...";
-        
-        if (navigator.geolocation) {
-            navigator.geolocation.watchPosition(async (pos) => {
-                document.getElementById('status').innerText = `GPS Aktiivinen: ${pos.coords.latitude.toFixed(2)}, ${pos.coords.longitude.toFixed(2)}`;
-                if (!userCity) {
-                    try {
-                        const r = await fetch('https://ipapi.co/json/');
-                        const d = await r.json();
-                        userCity = d.city;
-                    } catch(e) { userCity = "Suomi"; }
-                }
-            });
-        }
-        setInterval(update, 15000); update();
+    let map, userMarker;
+    let myLat, myLon, myCity = "";
+    let seenAlerts = new Set();
+    const voice = window.speechSynthesis;
+
+    // Alustetaan kartta
+    function initMap(lat, lon) {
+        map = L.map('map').setView([lat, lon], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // Tyylitellään kartta tummaksi CSS-filtterillä
+        document.querySelector('.leaflet-tile-pane').style.filter = "invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%)";
+
+        userMarker = L.circleMarker([lat, lon], {
+            radius: 8, color: '#007bff', fillColor: '#007bff', fillOpacity: 1
+        }).addTo(map).bindPopup("Sinun sijaintisi");
     }
 
-    async function update() {
+    async function startApp() {
+        document.getElementById('start-overlay').style.display = 'none';
+        
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(pos => {
+                myLat = pos.coords.latitude;
+                myLon = pos.coords.longitude;
+                initMap(myLat, myLon);
+                fetchMyCity();
+                
+                // Päivitetään sijaintia
+                navigator.geolocation.watchPosition(p => {
+                    myLat = p.coords.latitude;
+                    myLon = p.coords.longitude;
+                    if(userMarker) userMarker.setLatLng([myLat, myLon]);
+                    document.getElementById('gps-status').innerText = `GPS OK: ${myLat.toFixed(3)}, ${myLon.toFixed(3)}`;
+                });
+
+                // Aloitetaan datan haku
+                refreshData();
+                setInterval(refreshData, 20000);
+            });
+        }
+    }
+
+    async function fetchMyCity() {
+        try {
+            const r = await fetch('https://ipapi.co/json/');
+            const d = await r.json();
+            myCity = d.city;
+        } catch(e) { myCity = "Suomi"; }
+    }
+
+    async function refreshData() {
         try {
             const r = await fetch('/api/full_feed');
             const data = await r.json();
             data.reverse().forEach(item => {
-                if (!seen.has(item.id)) {
-                    const t = item.title.toLowerCase();
-                    const s = item.summary.toLowerCase();
-                    // Tunnistaa moottoritiet (Vt1, E18, jne)
-                    const isHwy = /(vt\d+|e\d+|valtatie|kehä|moottoritie)/i.test(t);
-                    // Tunnistaa paikalliset hälytykset
-                    const isLocal = userCity && (t.includes(userCity.toLowerCase()) || s.includes(userCity.toLowerCase()));
-
-                    if (isHwy || isLocal || item.source === "VAARA") {
-                        seen.add(item.id);
-                        render(item, isHwy, isLocal);
-                        speak(item, isHwy, isLocal);
-                    }
+                if (!seenAlerts.has(item.id)) {
+                    processAlert(item);
                 }
             });
-        } catch(e) { console.error("Yhteysvirhe"); }
+        } catch(e) { console.error("Haku epäonnistui"); }
     }
 
-    function render(item, h, l) {
-        const f = document.getElementById('feed'); const c = document.createElement('div');
-        c.className = `card ${l ? 'near' : ''} ${h ? 'highway' : ''}`;
-        c.innerHTML = `<strong>${item.source}</strong><h3>${item.title}</h3><p>${item.summary}</p>`;
+    function processAlert(item) {
+        const title = item.title.toLowerCase();
+        const isHwy = /(vt\d+|e\d+|valtatie|kantatie|kehä|moottoritie)/i.test(title);
+        const isLocal = myCity && title.includes(myCity.toLowerCase());
+        const isDanger = item.source === "VAARA";
+
+        if (isHwy || isLocal || isDanger) {
+            seenAlerts.add(item.id);
+            addMarkerToMap(item, isHwy, isLocal);
+            renderCard(item, isHwy, isLocal, isDanger);
+            speak(item, isHwy, isLocal, isDanger);
+        }
+    }
+
+    function addMarkerToMap(item, h, l) {
+        // Koska meillä ei ole tarkkoja koordinaatteja feedissä, 
+        // simuloidaan marker lähelle käyttäjää jos se on paikallinen,
+        // tai näytetään se yleisenä ilmoituksena.
+        // OIKEASSA versiossa tässä käytettäisiin Geocoding APIa.
+        if (l && map) {
+            const offsetLat = (Math.random() - 0.5) * 0.02;
+            const offsetLon = (Math.random() - 0.5) * 0.02;
+            const m = L.marker([myLat + offsetLat, myLon + offsetLon]).addTo(map);
+            m.bindPopup(`<b>${item.source}</b><br>${item.title}`).openPopup();
+        }
+    }
+
+    function renderCard(item, h, l, d) {
+        const f = document.getElementById('feed');
+        const c = document.createElement('div');
+        c.className = `alert-card ${h ? 'highway' : ''} ${l ? 'local' : ''} ${d ? 'danger' : ''}`;
+        c.innerHTML = `
+            <small>${item.source}</small>
+            <h3 style="margin:5px 0;">${item.title}</h3>
+            <p style="font-size:0.9em; color:#bbb; margin:0;">${item.summary}</p>
+        `;
         f.prepend(c);
     }
 
-    function speak(item, h, l) {
-        let msg = h ? `Tie-ilmoitus: ${item.title}` : `Hälytys lähelläsi: ${item.title}`;
-        if (item.source === "VAARA") msg = `VAARATIEDOTE: ${item.title}`;
-        const u = new SpeechSynthesisUtterance(msg); u.lang = 'fi-FI'; synth.speak(u);
+    function speak(item, h, l, d) {
+        let msg = h ? `Tie-ilmoitus. ${item.title}` : `Hälytys lähellä. ${item.title}`;
+        if (d) msg = `VAARATIEDOTE. ${item.title}`;
+        const u = new SpeechSynthesisUtterance(msg);
+        u.lang = 'fi-FI';
+        voice.speak(u);
     }
 </script>
 </body>
